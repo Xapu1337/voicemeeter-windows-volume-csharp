@@ -1,16 +1,19 @@
-node_modules
-_build
-_dist
-npm-debug.log
-.env
-.DS_Store
+# .NET build outputs
+bin/
+obj/
+
+# User-specific settings and secrets
 settings.json
-/.idea/.gitignore
-/.idea/deployment.xml
-/.idea/git_toolbox_prj.xml
-/.idea/modules.xml
-/.idea/php.xml
-/.idea/prettier.xml
-/.idea/inspectionProfiles/Project_Default.xml
-/.idea/vcs.xml
-/.idea/voicemeeter-windows-volume.iml
+
+# Visual Studio / Rider
+.vs/
+*.user
+*.suo
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Crash logs
+vmwv-crash.log
