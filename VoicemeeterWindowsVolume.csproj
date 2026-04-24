@@ -10,8 +10,12 @@
     <AssemblyName>VMWV</AssemblyName>
     <RootNamespace>VoicemeeterWindowsVolume</RootNamespace>
     <ApplicationIcon></ApplicationIcon>
-    <Version>1.8.0.2</Version>
+    <Version>1.80</Version>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="9.0.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Update="Assets\app-default.ico">

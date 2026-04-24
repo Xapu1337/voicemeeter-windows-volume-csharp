@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Management;
 using System.Text.RegularExpressions;
 
 namespace VoicemeeterWindowsVolume.Controllers;
@@ -20,24 +21,63 @@ public static class ProcessController
     }
 
     /// <summary>
-    /// Polls every 5 seconds until a process matching the regex is running, then invokes callback.
+    /// Waits until a process matching the regex is running, then invokes the callback.
+    /// Uses a WMI event subscription so the thread is idle rather than polling.
+    /// Falls back to 5-second polling if WMI is unavailable.
     /// </summary>
     public static void WaitForProcess(string processNamePattern, Action callback)
     {
-        Task.Run(async () =>
+        Task.Run(() =>
         {
-            while (true)
+            // Check if already running before subscribing.
+            string? found = GetRunningProcess(processNamePattern);
+            if (found != null)
             {
-                string? found = GetRunningProcess(processNamePattern);
-                if (found != null)
-                {
-                    System.Console.WriteLine($"Process found: {found}");
-                    callback();
-                    return;
-                }
-                System.Console.WriteLine($"Waiting for process: {processNamePattern}");
-                await Task.Delay(5000);
+                System.Console.WriteLine($"Process found: {found}");
+                callback();
+                return;
             }
+
+            System.Console.WriteLine($"Waiting for Voicemeeter to start...");
+
+            try
+            {
+                // WMI fires an event whenever any process is created (WITHIN 2 = 2-second internal poll).
+                using var watcher = new ManagementEventWatcher(
+                    new WqlEventQuery(
+                        "SELECT * FROM __InstanceCreationEvent WITHIN 2 " +
+                        "WHERE TargetInstance ISA 'Win32_Process'"));
+
+                var ready = new System.Threading.ManualResetEventSlim(false);
+
+                watcher.EventArrived += (_, args) =>
+                {
+                    try
+                    {
+                        var target = (ManagementBaseObject)args.NewEvent["TargetInstance"];
+                        string? name = target["Name"]?.ToString();
+                        if (name != null && Regex.IsMatch(name, processNamePattern, RegexOptions.IgnoreCase))
+                        {
+                            System.Console.WriteLine($"Process started: {name}");
+                            ready.Set();
+                        }
+                    }
+                    catch { /* ignore malformed WMI events */ }
+                };
+
+                watcher.Start();
+                ready.Wait();
+                watcher.Stop();
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"WMI watch unavailable, falling back to polling: {ex.Message}");
+                while (GetRunningProcess(processNamePattern) == null)
+                    System.Threading.Thread.Sleep(5000);
+            }
+
+            System.Console.WriteLine($"Process detected, connecting...");
+            callback();
         });
     }
 

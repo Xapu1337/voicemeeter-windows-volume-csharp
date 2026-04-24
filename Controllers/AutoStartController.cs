@@ -1,44 +1,38 @@
+using Microsoft.Win32;
 using VoicemeeterWindowsVolume.Models;
 
 namespace VoicemeeterWindowsVolume.Controllers;
 
 /// <summary>
-/// Manages Windows scheduled task for auto-starting the app at login.
-/// MVC Controller: wraps startup management side effects.
+/// Manages auto-start at login via the HKCU Run registry key.
+/// No elevation required; scoped to current user.
 /// </summary>
 public static class AutoStartController
 {
+    private const string RunKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+
+    private static string ExePath =>
+        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "VMWV.exe"));
+
     public static void EnableStartOnLaunch()
     {
         System.Console.WriteLine("Enabling automatic start with Windows");
-
-        string appPath = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, $"{AppStrings.AppName}.ps1")
-        );
-
-        string psCommand =
-            $"$name = \"{AppStrings.AppName}\";\n" +
-            $"$description = \"Runs {AppStrings.FriendlyName} app at login\";\n" +
-            $"$argument = '-ExecutionPolicy Bypass -WindowStyle Hidden -File \"{appPath}\" -FFFeatureOff';\n" +
-            "$action = New-ScheduledTaskAction -Execute \"powershell.exe\" -Argument $argument;\n" +
-            "$trigger = New-ScheduledTaskTrigger -AtLogon;\n" +
-            "$principal = New-ScheduledTaskPrincipal -GroupId \"BUILTIN\\Administrators\" -RunLevel Highest;\n" +
-            "$settings = New-ScheduledTaskSettingsSet -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -DontStopOnIdleEnd -ExecutionTimeLimit 0;\n" +
-            "$task = New-ScheduledTask -Description $description -Action $action -Principal $principal -Trigger $trigger -Settings $settings;\n" +
-            "Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue;\n" +
-            "Register-ScheduledTask $name -InputObject $task;";
-
-        PowerShellRunner.Run(psCommand);
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+        key?.SetValue(AppStrings.AppName, $"\"{ExePath}\"");
     }
 
     public static void DisableStartOnLaunch()
     {
         System.Console.WriteLine("Disabling automatic start with Windows");
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+        key?.DeleteValue(AppStrings.AppName, throwOnMissingValue: false);
+    }
 
-        string psCommand =
-            $"$name = \"{AppStrings.AppName}\";\n" +
-            "Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue;";
-
-        PowerShellRunner.Run(psCommand);
+    /// <summary>Returns true if the run entry currently exists and points to this exe.</summary>
+    public static bool IsEnabled()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey);
+        return key?.GetValue(AppStrings.AppName) is string val &&
+               val.Trim('"') == ExePath;
     }
 }

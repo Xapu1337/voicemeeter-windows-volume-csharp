@@ -15,9 +15,16 @@ internal static class Program
     private static readonly string LogPath =
         Path.Combine(AppContext.BaseDirectory, "vmwv-crash.log");
 
+    private static readonly string AppLogPath =
+        Path.Combine(AppContext.BaseDirectory, "vmwv.log");
+
     [STAThread]
     static void Main()
     {
+        // Redirect Console.WriteLine to vmwv.log (timestamped, auto-flush)
+        var logWriter = new TimestampedFileWriter(AppLogPath);
+        Console.SetOut(logWriter);
+
         // Catch all unhandled exceptions and log them before exiting
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             LogFatal(e.ExceptionObject?.ToString() ?? "Unknown error");
@@ -120,5 +127,36 @@ internal sealed class TrayApplicationContext : ApplicationContext
             System.Console.WriteLine("clean exit");
         }
         catch { /* best-effort cleanup */ }
+    }
+}
+
+/// <summary>
+/// TextWriter that prepends a timestamp to every line and writes to a file with auto-flush.
+/// Replaces Console.Out so all Console.WriteLine calls are captured to vmwv.log.
+/// </summary>
+internal sealed class TimestampedFileWriter : TextWriter
+{
+    private readonly StreamWriter _writer;
+
+    public TimestampedFileWriter(string path)
+    {
+        _writer = new StreamWriter(path, append: false, encoding: System.Text.Encoding.UTF8)
+        {
+            AutoFlush = true,
+        };
+    }
+
+    public override System.Text.Encoding Encoding => System.Text.Encoding.UTF8;
+
+    public override void WriteLine(string? value)
+        => _writer.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {value}");
+
+    public override void Write(string? value)
+        => _writer.Write(value);
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _writer.Dispose();
+        base.Dispose(disposing);
     }
 }

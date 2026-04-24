@@ -100,37 +100,86 @@ public class VoicemeeterBridge : IDisposable
     private bool _disposed;
 
     public event Action? OnParametersChange;
+    public event Action? OnDisconnected;
     public string VmType { get; private set; } = "voicemeeter";
 
     public void Connect()
     {
-        int result = VBVMR_Login();
-        if (result < 0)
-            throw new InvalidOperationException($"VBVMR_Login failed with code {result}");
-
-        // Determine VM type
-        VBVMR_GetVoicemeeterType(out int vmType);
-        VmType = vmType switch
+        // Login can succeed (return 0/1) while the VM engine is still initializing —
+        // GetVoicemeeterType will return -1 until shared memory is mapped.
+        // Calling any parameter API before that point → AV (0xc0000005).
+        // Retry here so no unmanaged exception ever propagates to managed code.
+        const int maxAttempts = 30;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            2 => "voicemeeterBanana",
-            3 => "voicemeeterPotato",
-            _ => "voicemeeter",
-        };
+            int loginResult = VBVMR_Login();
+            if (loginResult < 0)
+            {
+                // VM process exists but COM/IPC server not accepting clients yet
+                System.Console.WriteLine($"VBVMR_Login not ready (attempt {attempt}/{maxAttempts}, code {loginResult})");
+                VBVMR_Logout();
+                System.Threading.Thread.Sleep(1000);
+                continue;
+            }
 
-        System.Console.WriteLine($"Connected to Voicemeeter type: {VmType}");
+            int typeResult = VBVMR_GetVoicemeeterType(out int vmType);
+            if (typeResult < 0 || vmType <= 0)
+            {
+                // Login succeeded but shared memory not mapped yet
+                System.Console.WriteLine($"VBVMR_GetVoicemeeterType not ready (attempt {attempt}/{maxAttempts}, code {typeResult}, type {vmType})");
+                VBVMR_Logout();
+                System.Threading.Thread.Sleep(1000);
+                continue;
+            }
 
-        // Poll for parameter changes every 50ms
-        _pollTimer = new System.Threading.Timer(_ =>
-        {
-            int dirty = VBVMR_IsParametersDirty();
-            if (dirty > 0)
-                OnParametersChange?.Invoke();
-        }, null, 0, 50);
+            VmType = vmType switch
+            {
+                2 => "voicemeeterBanana",
+                3 => "voicemeeterPotato",
+                _ => "voicemeeter",
+            };
+
+            System.Console.WriteLine($"Connected to Voicemeeter type: {VmType} (attempt {attempt})");
+
+            // Poll for parameter changes every 50ms; fire OnDisconnected if VM is gone.
+            // Interlocked.Exchange ensures only the first concurrent callback fires OnDisconnected
+            // (System.Threading.Timer callbacks can overlap when they take longer than the period).
+            _pollTimer = new System.Threading.Timer(_ =>
+            {
+                int dirty = VBVMR_IsParametersDirty();
+                if (dirty < 0)
+                {
+                    var t = System.Threading.Interlocked.Exchange(ref _pollTimer, null);
+                    if (t != null)
+                    {
+                        t.Dispose();
+                        OnDisconnected?.Invoke();
+                    }
+                }
+                else if (dirty > 0)
+                {
+                    OnParametersChange?.Invoke();
+                }
+            }, null, 0, 50);
+
+            return; // connected successfully
+        }
+
+        throw new InvalidOperationException($"Voicemeeter not ready after {maxAttempts} attempts.");
     }
 
     public void Disconnect()
     {
-        _pollTimer?.Dispose();
+        // Wait for any in-progress timer callback to finish before calling VBVMR_Logout.
+        // If we call Logout while IsParametersDirty is executing on another thread the DLL
+        // corrupts its internal state and the next Login will AV.
+        if (_pollTimer != null)
+        {
+            using var done = new System.Threading.ManualResetEventSlim(false);
+            if (_pollTimer.Dispose(done.WaitHandle))
+                done.Wait(500); // max 500ms; 50ms period so one tick is well within that
+            _pollTimer = null;
+        }
         VBVMR_Logout();
     }
 

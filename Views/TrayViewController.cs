@@ -25,6 +25,9 @@ public class TrayViewController : IDisposable
     // Toggle checkboxes keyed by their sid
     private readonly Dictionary<string, ToolStripMenuItem> _toggleItems = new();
 
+    // Status item shown when Voicemeeter is not connected
+    private ToolStripMenuItem? _vmNotDetectedItem;
+
     private readonly SettingsController _settings = SettingsController.Instance;
 
     // -------------------------------------------------------------------------
@@ -38,6 +41,26 @@ public class TrayViewController : IDisposable
     {
         if (_syncForm == null || !_syncForm.IsHandleCreated) return;
         _syncForm.BeginInvoke(RefreshBindingLabels);
+    }
+
+    public void ShowVmNotDetected()
+    {
+        if (_syncForm == null || !_syncForm.IsHandleCreated) return;
+        _syncForm.BeginInvoke(() =>
+        {
+            if (_vmNotDetectedItem != null)
+                _vmNotDetectedItem.Visible = true;
+        });
+    }
+
+    public void HideVmNotDetected()
+    {
+        if (_syncForm == null || !_syncForm.IsHandleCreated) return;
+        _syncForm.BeginInvoke(() =>
+        {
+            if (_vmNotDetectedItem != null)
+                _vmNotDetectedItem.Visible = false;
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -85,10 +108,14 @@ public class TrayViewController : IDisposable
     private void BuildMenu(ContextMenuStrip menu)
     {
         menu.Items.Add(new ToolStripMenuItem(
-            $"{AppStrings.FriendlyName.ToUpperInvariant()}\tv{AppStrings.Version}")
+            $"{AppStrings.FriendlyName.ToUpperInvariant()}\tV{AppStrings.Version}")
         { Enabled = false });
 
         menu.Items.Add(new ToolStripSeparator());
+
+        // Shown while Voicemeeter is not connected; hidden once the bridge connects
+        _vmNotDetectedItem = new ToolStripMenuItem("VoiceMeeter not detected.") { Enabled = false };
+        menu.Items.Add(_vmNotDetectedItem);
 
         // Bindings submenu
         menu.Items.Add(BuildBindingsMenu());
@@ -274,13 +301,13 @@ public class TrayViewController : IDisposable
         sub.DropDownItems.Add(ToggleItem(
             sid: "start_with_windows",
             title: AppStrings.MenuItems.StartWithWindows,
-            defaultChecked: true,
+            defaultChecked: AutoStartController.IsEnabled(),
             onActivate: checked_ =>
             {
                 if (checked_) AutoStartController.EnableStartOnLaunch();
                 else AutoStartController.DisableStartOnLaunch();
             },
-            initIfChecked: true
+            initIfChecked: false
         ));
 
         sub.DropDownItems.Add(ToggleItem(

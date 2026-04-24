@@ -4,7 +4,15 @@ public static class AppStrings
 {
     public const string AppName = "voicemeeter-windows-volume";
     public const string FriendlyName = "Voicemeeter Windows Volume";
-    public const string Version = "1.8.0.2";
+
+    public static string Version
+    {
+        get
+        {
+            var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            return v != null ? $"{v.Major}.{v.Minor:D2}" : "?.??";
+        }
+    }
 
     public static class MenuItems
     {

@@ -21,9 +21,11 @@ public class AudioSyncController
     private bool _voicemeeterLoaded;
     private long _lastEventTimestamp;
     private System.Threading.Timer? _engineWaiter;
+    private int _connecting = 0; // Interlocked guard — prevents concurrent ConnectVoicemeeter calls
 
     private int? _lastVolume;
     private long _lastVolumeTime;
+    private bool _audioRunning = false;
 
     public VoicemeeterBridge? GetVoicemeeterConnection() => _vm;
 
@@ -39,41 +41,71 @@ public class AudioSyncController
 
     private void ConnectVoicemeeter()
     {
+        // Prevent re-entry — only one connection attempt in flight at a time
+        if (System.Threading.Interlocked.CompareExchange(ref _connecting, 1, 0) != 0) return;
+
         ProcessController.WaitForProcess(@"voicemeeter(?!.*setup).*\.exe", () =>
         {
-            try
+            Task.Run(async () =>
             {
-                _vm = new VoicemeeterBridge();
-                _vm.Connect();
-
-                _lastEventTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-                _vm.OnParametersChange += () =>
+                try
                 {
-                    if (!_voicemeeterLoaded)
-                        _lastEventTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    OnVoicemeeterChanged();
-                };
+                    _vm = new VoicemeeterBridge();
+                    _vm.Connect(); // retries internally until GetVoicemeeterType returns valid type
 
-                // Wait until events stop firing for 3s to consider VM fully loaded
-                _engineWaiter = new System.Threading.Timer(_ =>
-                {
-                    long delta = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _lastEventTimestamp;
-                    if (delta >= 3000)
+                    _vm.OnDisconnected += HandleVmDisconnected;
+                    TrayViewController.Instance.HideVmNotDetected();
+
+                    _lastEventTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+                    _vm.OnParametersChange += () =>
                     {
-                        _engineWaiter?.Dispose();
-                        _voicemeeterLoaded = true;
-                        System.Console.WriteLine("Voicemeeter: Fully Initialized");
-                        OnVoicemeeterReady();
-                    }
-                }, null, 1000, 1000);
-            }
-            catch (Exception ex)
-            {
-                System.Console.WriteLine($"Error connecting to Voicemeeter: {ex.Message}");
-                Application.Exit();
-            }
+                        if (!_voicemeeterLoaded)
+                            _lastEventTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        OnVoicemeeterChanged();
+                    };
+
+                    // Wait until events stop firing for 3s to consider VM fully loaded
+                    _engineWaiter = new System.Threading.Timer(_ =>
+                    {
+                        long delta = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _lastEventTimestamp;
+                        if (delta >= 3000)
+                        {
+                            _engineWaiter?.Dispose();
+                            _voicemeeterLoaded = true;
+                            System.Console.WriteLine("Voicemeeter: Fully Initialized");
+                            OnVoicemeeterReady();
+                        }
+                    }, null, 1000, 1000);
+
+                    System.Threading.Interlocked.Exchange(ref _connecting, 0);
+                }
+                catch (Exception ex)
+                {
+                    System.Console.WriteLine($"Error connecting to Voicemeeter: {ex.Message}");
+                    _vm?.Dispose();
+                    _vm = null;
+                    TrayViewController.Instance.ShowVmNotDetected();
+                    System.Threading.Interlocked.Exchange(ref _connecting, 0);
+                    await Task.Delay(3000);
+                    ConnectVoicemeeter();
+                }
+            });
         });
+    }
+
+    private void HandleVmDisconnected()
+    {
+        System.Console.WriteLine("Voicemeeter disconnected. Waiting to reconnect...");
+        _voicemeeterLoaded = false;
+        _audioRunning = false;
+        _engineWaiter?.Dispose();
+        _engineWaiter = null;
+        var vm = _vm;
+        _vm = null;
+        vm?.Dispose(); // waits for in-flight timer callback before VBVMR_Logout
+        TrayViewController.Instance.ShowVmNotDetected();
+        ConnectVoicemeeter();
     }
 
     private void OnVoicemeeterReady()
@@ -119,6 +151,10 @@ public class AudioSyncController
 
     private void RunWinAudio()
     {
+        // Guard: only subscribe once — re-entering on reconnect doubles up all handlers
+        if (_audioRunning) return;
+        _audioRunning = true;
+
         var settings = _settings.GetSettings();
         _audio.StartAudioScanner(settings.PollingRate);
 
