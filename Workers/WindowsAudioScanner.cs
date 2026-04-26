@@ -20,6 +20,7 @@ public class WindowsAudioScanner
     private List<string> _audioDevices = new();
     private List<string> _allDevices = new();
     private bool _started;
+    private NativeVolumeListener? _nativeListener;
 
     // Events
     public event EventHandler? Started;
@@ -83,7 +84,10 @@ public class Audio {
 
     public void SetVolume(int volumePercent)
     {
-        Controllers.PowerShellRunner.SendToWorker(Label, $"[Audio]::Volume = {volumePercent * 0.01f:F2}");
+        if (_nativeListener != null)
+            _nativeListener.SetVolume(volumePercent * 0.01f);
+        else
+            Controllers.PowerShellRunner.SendToWorker(Label, $"[Audio]::Volume = {volumePercent * 0.01f:F2}");
     }
 
     public void StartAudioScanner(int intervalMs)
@@ -91,21 +95,47 @@ public class Audio {
         if (_started) return;
         _started = true;
 
-        Controllers.PowerShellRunner.StartWorker(
-            label: Label,
-            command: "[Audio]::Volume | Out-Host; [Audio]::Mute | Out-Host;",
-            intervalMs: intervalMs,
-            onResponse: HandleAudioResponse,
-            setup: AudioClassSetup
-        );
+        // Prefer event-driven native WASAPI
+        // we do have a fallback path if this fails
+        var native = new NativeVolumeListener();
+        if (native.Start())
+        {
+            _nativeListener = native;
+
+            // Fire initial state so callers receive the Started event
+            var (vol, muted) = native.GetCurrentState();
+            HandleAudioValues(vol, muted, initial: true);
+
+            native.VolumeNotification += (vol, muted) => HandleAudioValues(vol, muted, initial: false);
+        }
+        else
+        {
+            native.Dispose();
+            Controllers.PowerShellRunner.StartWorker(
+                label: Label,
+                command: "[Audio]::Volume | Out-Host; [Audio]::Mute | Out-Host;",
+                intervalMs: intervalMs,
+                onResponse: HandleAudioResponse,
+                setup: AudioClassSetup
+            );
+        }
     }
 
     public void StopAudioScanner()
     {
-        Controllers.PowerShellRunner.StopWorker(Label);
+        if (_nativeListener != null)
+        {
+            _nativeListener.Dispose();
+            _nativeListener = null;
+        }
+        else
+        {
+            Controllers.PowerShellRunner.StopWorker(Label);
+        }
         _started = false;
     }
 
+    // PowerShell fallback path 
     private void HandleAudioResponse(List<string> lines)
     {
         if (lines.Count < 2) return;
@@ -118,8 +148,14 @@ public class Audio {
         );
         if (!parsed) return;
 
-        int newVolume = (int)Math.Round(rawVolume * 100);
         bool newMuted = lines[1].Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
+        HandleAudioValues(rawVolume, newMuted, initial: false);
+    }
+
+    // Shared handler for both native and PowerShell paths
+    private void HandleAudioValues(float rawVolume, bool newMuted, bool initial)
+    {
+        int newVolume = (int)Math.Round(rawVolume * 100);
 
         if (_volume != newVolume)
         {
@@ -127,7 +163,7 @@ public class Audio {
             int old = _volume ?? 0;
             _volume = newVolume;
 
-            if (wasNull)
+            if (wasNull || initial)
                 Started?.Invoke(this, EventArgs.Empty);
             else
                 VolumeChanged?.Invoke(this, new VolumeChange { Old = old, New = newVolume });
@@ -139,7 +175,7 @@ public class Audio {
             bool wasNull = _muted == null;
             _muted = newMuted;
 
-            if (!wasNull)
+            if (!wasNull && !initial)
                 MuteChanged?.Invoke(this, new MuteChange { Old = old, New = newMuted });
         }
     }

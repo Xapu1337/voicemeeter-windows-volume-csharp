@@ -108,7 +108,7 @@ internal static class Program
 
 /// <summary>
 /// Custom ApplicationContext that keeps the WinForms message pump running
-/// for a tray-only app (no main form). Handles graceful shutdown.
+/// for a tray-only app (no main view). Handles graceful shutdown.
 /// </summary>
 internal sealed class TrayApplicationContext : ApplicationContext
 {
@@ -133,6 +133,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 /// <summary>
 /// TextWriter that prepends a timestamp to every line and writes to a file with auto-flush.
 /// Replaces Console.Out so all Console.WriteLine calls are captured to vmwv.log.
+/// TODO: disable logging maybe? or log level control idk
 /// </summary>
 internal sealed class TimestampedFileWriter : TextWriter
 {

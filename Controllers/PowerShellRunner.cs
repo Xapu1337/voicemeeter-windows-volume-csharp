@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace VoicemeeterWindowsVolume.Controllers;
 
 /// <summary>
-/// Runs PowerShell commands (one-shot and persistent worker model).
+/// Runs PowerShell commands 
 /// </summary>
 public static class PowerShellRunner
 {

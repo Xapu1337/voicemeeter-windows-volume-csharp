@@ -6,6 +6,7 @@ namespace VoicemeeterWindowsVolume.Controllers;
 /// <summary>
 /// Manages auto-start at login via the HKCU Run registry key.
 /// No elevation required; scoped to current user.
+/// Also is easier than a vbs script trying to open it
 /// </summary>
 public static class AutoStartController
 {

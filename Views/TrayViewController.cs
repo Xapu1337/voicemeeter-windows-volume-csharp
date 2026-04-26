@@ -7,6 +7,7 @@ namespace VoicemeeterWindowsVolume.Views;
 /// <summary>
 /// MVC View: Builds and manages the system tray context menu.
 /// All menu item construction lives here, mirroring the JS menu item modules.
+/// Breaks MVC as we dont really have a "View", so this does more than a view class would.
 /// </summary>
 public class TrayViewController : IDisposable
 {

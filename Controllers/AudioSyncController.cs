@@ -41,7 +41,7 @@ public class AudioSyncController
 
     private void ConnectVoicemeeter()
     {
-        // Prevent re-entry — only one connection attempt in flight at a time
+        // Prevent re-entry (only one connection attempt in flight at a time)
         if (System.Threading.Interlocked.CompareExchange(ref _connecting, 1, 0) != 0) return;
 
         ProcessController.WaitForProcess(@"voicemeeter(?!.*setup).*\.exe", () =>
@@ -65,11 +65,11 @@ public class AudioSyncController
                         OnVoicemeeterChanged();
                     };
 
-                    // Wait until events stop firing for 3s to consider VM fully loaded
+                    // in my testing VM loads between 3s - 5s (i think it can be set in VM), so we hit the middle with 4kms
                     _engineWaiter = new System.Threading.Timer(_ =>
                     {
                         long delta = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _lastEventTimestamp;
-                        if (delta >= 3000)
+                        if (delta >= 4000)
                         {
                             _engineWaiter?.Dispose();
                             _voicemeeterLoaded = true;
@@ -151,7 +151,7 @@ public class AudioSyncController
 
     private void RunWinAudio()
     {
-        // Guard: only subscribe once — re-entering on reconnect doubles up all handlers
+        // Guard: only subscribe once 
         if (_audioRunning) return;
         _audioRunning = true;
 
