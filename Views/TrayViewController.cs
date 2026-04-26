@@ -109,7 +109,7 @@ public class TrayViewController : IDisposable
     private void BuildMenu(ContextMenuStrip menu)
     {
         menu.Items.Add(new ToolStripMenuItem(
-            $"{AppStrings.FriendlyName.ToUpperInvariant()}\tV{AppStrings.Version}")
+            $"{AppStrings.FriendlyName.ToUpperInvariant()}\t V{AppStrings.Version}")
         { Enabled = false });
 
         menu.Items.Add(new ToolStripSeparator());
