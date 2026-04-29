@@ -9,14 +9,17 @@ namespace VoicemeeterWindowsVolume;
 /// </summary>
 internal static class Program
 {
+    private static readonly string DataDir =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VMWV");
+
     private static readonly string SettingsPath =
-        Path.Combine(AppContext.BaseDirectory, "settings.json");
+        Path.Combine(DataDir, "settings.json");
 
     private static readonly string LogPath =
-        Path.Combine(AppContext.BaseDirectory, "vmwv-crash.log");
+        Path.Combine(DataDir, "vmwv-crash.log");
 
     private static readonly string AppLogPath =
-        Path.Combine(AppContext.BaseDirectory, "vmwv.log");
+        Path.Combine(DataDir, "vmwv.log");
 
     [STAThread]
     static void Main()
@@ -33,6 +36,8 @@ internal static class Program
 
         try
         {
+            Directory.CreateDirectory(DataDir);
+
             // Redirect Console.WriteLine to vmwv.log (timestamped, auto-flush)
             var logWriter = new TimestampedFileWriter(AppLogPath);
             Console.SetOut(logWriter);
@@ -85,6 +90,7 @@ internal static class Program
     {
         try
         {
+            Directory.CreateDirectory(DataDir);
             File.AppendAllText(LogPath,
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
         }

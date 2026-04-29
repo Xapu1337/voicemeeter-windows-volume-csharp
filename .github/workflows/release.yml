@@ -41,6 +41,18 @@ jobs:
       - name: Zip release artifact
         run: 7z a "VMWV-${{ github.ref_name }}-win-x64.zip" ".\publish\VMWV.exe"
 
+      - name: Delete old releases and tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $releases = gh release list --repo ${{ github.repository }} --limit 100 --json tagName | ConvertFrom-Json
+          foreach ($r in $releases) {
+            if ($r.tagName -ne "${{ github.ref_name }}") {
+              Write-Host "Deleting release $($r.tagName)"
+              gh release delete $r.tagName --repo ${{ github.repository }} --yes --cleanup-tag
+            }
+          }
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
