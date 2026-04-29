@@ -21,10 +21,6 @@ internal static class Program
     [STAThread]
     static void Main()
     {
-        // Redirect Console.WriteLine to vmwv.log (timestamped, auto-flush)
-        var logWriter = new TimestampedFileWriter(AppLogPath);
-        Console.SetOut(logWriter);
-
         // Catch all unhandled exceptions and log them before exiting
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             LogFatal(e.ExceptionObject?.ToString() ?? "Unknown error");
@@ -37,6 +33,10 @@ internal static class Program
 
         try
         {
+            // Redirect Console.WriteLine to vmwv.log (timestamped, auto-flush)
+            var logWriter = new TimestampedFileWriter(AppLogPath);
+            Console.SetOut(logWriter);
+
             ApplicationConfiguration.Initialize();
 
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);

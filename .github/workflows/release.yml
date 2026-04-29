@@ -39,7 +39,7 @@ jobs:
             --output publish/
 
       - name: Zip release artifact
-        run: Compress-Archive -Path publish\VMWV.exe -DestinationPath VMWV-${{ github.ref_name }}-win-x64.zip
+        run: 7z a "VMWV-${{ github.ref_name }}-win-x64.zip" ".\publish\VMWV.exe"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
