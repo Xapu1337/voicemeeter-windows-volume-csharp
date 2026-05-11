@@ -1,16 +1,26 @@
 using VoicemeeterWindowsVolume.Controllers;
 using VoicemeeterWindowsVolume.Models;
 using VoicemeeterWindowsVolume.Workers;
+using System.Runtime.InteropServices;
 
 namespace VoicemeeterWindowsVolume.Views;
 
 /// <summary>
 /// MVC View: Builds and manages the system tray context menu.
-/// All menu item construction lives here, mirroring the JS menu item modules.
+/// All menu item construction lives here, mirroring the JS menu (atleast as close as we can with wpf)
+/// 
 /// Breaks MVC as we dont really have a "View", so this does more than a view class would.
 /// </summary>
 public class TrayViewController : IDisposable
 {
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    private const int SW_SHOW = 5;
+
     private static TrayViewController? _instance;
     public static TrayViewController Instance => _instance ??= new TrayViewController();
 
@@ -139,8 +149,18 @@ public class TrayViewController : IDisposable
 
         // Support section
         menu.Items.Add(new ToolStripMenuItem(AppStrings.MenuItems.SupportTitle) { Enabled = false });
+        
+        // Original author
+        menu.Items.Add(new ToolStripMenuItem("Original Author") { Enabled = false });
         menu.Items.Add(ItemVisitGithub());
         menu.Items.Add(ItemDonate());
+        
+        menu.Items.Add(new ToolStripSeparator());
+        
+        // Fork author section
+        menu.Items.Add(new ToolStripMenuItem("Fork Author") { Enabled = false });
+        menu.Items.Add(ItemVisitGithubFork());
+        menu.Items.Add(ItemDonateKofi());
 
         menu.Items.Add(new ToolStripSeparator());
 
@@ -387,7 +407,26 @@ public class TrayViewController : IDisposable
     private static ToolStripMenuItem ItemShowVoicemeeter()
     {
         var item = new ToolStripMenuItem(AppStrings.MenuItems.ShowVoicemeeter);
-        item.Click += (_, _) => AudioSyncController.Instance.GetVoicemeeterConnection()?.SendCommand("Show", 1);
+        item.Click += (_, _) =>
+        {
+            string? procName = ProcessController.GetRunningProcess(@"voicemeeter(?!.*setup).*\.exe");
+            if (procName != null)
+            {
+                // Find the process and bring its window to foreground
+                var processes = System.Diagnostics.Process.GetProcessesByName(
+                    System.IO.Path.GetFileNameWithoutExtension(procName));
+                
+                if (processes.Length > 0)
+                {
+                    var process = processes[0];
+                    if (process.MainWindowHandle != IntPtr.Zero)
+                    {
+                        ShowWindow(process.MainWindowHandle, SW_SHOW);
+                        SetForegroundWindow(process.MainWindowHandle);
+                    }
+                }
+            }
+        };
         return item;
     }
 
@@ -447,11 +486,27 @@ public class TrayViewController : IDisposable
         return item;
     }
 
+    private static ToolStripMenuItem ItemDonateKofi()
+    {
+        var item = new ToolStripMenuItem("Support on Ko-fi (Fork)");
+        item.Click += (_, _) =>
+            PowerShellRunner.Run("Start-Process \"https://ko-fi.com/paraxdev\"");
+        return item;
+    }
+
     private static ToolStripMenuItem ItemVisitGithub()
     {
         var item = new ToolStripMenuItem(AppStrings.MenuItems.VisitGithub);
         item.Click += (_, _) =>
             PowerShellRunner.Run("Start-Process \"https://github.com/Frosthaven/voicemeeter-windows-volume\"");
+        return item;
+    }
+
+    private static ToolStripMenuItem ItemVisitGithubFork()
+    {
+        var item = new ToolStripMenuItem("Visit Github (Fork)");
+        item.Click += (_, _) =>
+            PowerShellRunner.Run("Start-Process \"https://github.com/Xapu1337/voicemeeter-windows-volume-csharp\"");
         return item;
     }
 

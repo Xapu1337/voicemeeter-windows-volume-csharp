@@ -10,7 +10,7 @@
     <AssemblyName>VMWV</AssemblyName>
     <RootNamespace>VoicemeeterWindowsVolume</RootNamespace>
     <ApplicationIcon></ApplicationIcon>
-    <Version>1.84</Version>
+    <Version>1.85</Version>
   </PropertyGroup>
 
   <ItemGroup>
