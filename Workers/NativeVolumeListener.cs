@@ -74,7 +74,7 @@ public class NativeVolumeListener : IDisposable
     internal void OnNotification(float volume, bool muted)
         => VolumeNotification?.Invoke(volume, muted);
 
-    // ── COM callback 
+    //  COM callback 
 
     [ComVisible(true)]
     private class VolumeCallback : IAudioEndpointVolumeCallback
@@ -94,7 +94,7 @@ public class NativeVolumeListener : IDisposable
         }
     }
 
-    // ── Structs 
+    //  Structs 
 
     [StructLayout(LayoutKind.Sequential)]
     private struct AudioVolumeNotificationData
@@ -106,7 +106,7 @@ public class NativeVolumeListener : IDisposable
         // afChannelVolumes[] follows but is not needed
     }
 
-    // ── COM interface definitions 
+    //  COM interface definitions 
     //
     // Vtable order must exactly match endpointvolume.h / mmdeviceapi.h.
     // All methods use [PreserveSig] so we handle HRESULTs ourselves.
