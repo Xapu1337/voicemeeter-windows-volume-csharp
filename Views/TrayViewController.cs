@@ -506,7 +506,7 @@ public class TrayViewController : IDisposable
     {
         var item = new ToolStripMenuItem("Visit Github (Fork)");
         item.Click += (_, _) =>
-            PowerShellRunner.Run("Start-Process \"https://github.com/Xapu1337/voicemeeter-windows-volume-csharp\"");
+            PowerShellRunner.Run("Start-Process \"https://github.com/Paraxdev/voicemeeter-windows-volume-csharp\"");
         return item;
     }
 
