@@ -1,2 +1,7 @@
 full rights go to https://github.com/Frosthaven/voicemeeter-windows-volume
-i just lazily slopcoded this in C# since JS always crashed and was overall fucky.
+
+modifications made:
+- ported to c# (windows only)
+- fixed the annoying tray icon dupe bug (happend on the js version because it tried to periodically check if vm isnt open, and if youre vm crashed it will fail and reopen the app)
+- one exe (selfcontained .net runtime), no installer 
+- autorun registers over the registry now
