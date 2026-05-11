@@ -6,7 +6,5 @@ modifications made:
 - one exe (selfcontained .net runtime), no installer 
 - autorun registers over the registry now
 
+<img width="290" height="407" alt="image" src="https://github.com/user-attachments/assets/77e06502-d52c-494e-a284-167e6616e69d" />
 
-<img width="290" height="313" alt="image" src="https://github.com/user-attachments/assets/3a5f026a-d17e-4b66-b844-086a91a698f2" />
-
-<img width="644" height="322" alt="image" src="https://github.com/user-attachments/assets/f18271bb-3cff-455c-9b8e-f5bf81f08774" />
